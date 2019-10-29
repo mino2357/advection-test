@@ -10,7 +10,7 @@ const int Nx    = 64;
 const int Ny    = 64;
 const double dx = Lx / (Nx - 1);
 const double dy = Ly / (Ny - 1);
-const double dt = 0.00001;
+const double dt = 0.0001;
 const int INTV  = 100;
 
 namespace rittai3d{
@@ -43,21 +43,27 @@ namespace sksat {
 using Array = sksat::array_wrapper<Nx, sksat::array_wrapper<Ny>>;;
 
 void upWind_firstOrder_X(Array& u, Array& v, Array& u_next){
+    double ad1, ad2;
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
+            ad1 = 1.0; // u[i][j];
+            ad2 = 1.0; // v[i][j];
             u_next[i][j] = u[i][j]
-                            - dt * ( u[i][j] * (u[i+1][j] - u[i-1][j]) / (2.0 * dx) + std::abs(u[i][j]) * (- u[i+1][j] + 2.0 * u[i][j] - u[i-1][j]) / (2.0 * dx))
-                            - dt * ( v[i][j] * (u[i][j+1] - u[i][j-1]) / (2.0 * dy) + std::abs(v[i][j]) * (- u[i][j+1] + 2.0 * u[i][j] - u[i][j-1]) / (2.0 * dy));
+                            - dt * ( ad1 * (u[i+1][j] - u[i-1][j]) / (2.0 * dx) + std::abs(ad1) * (- u[i+1][j] + 2.0 * u[i][j] - u[i-1][j]) / (2.0 * dx))
+                            - dt * ( ad2 * (u[i][j+1] - u[i][j-1]) / (2.0 * dy) + std::abs(ad2) * (- u[i][j+1] + 2.0 * u[i][j] - u[i][j-1]) / (2.0 * dy));
         }
     }
 }
 
 void upWind_firstOrder_Y(Array& u, Array& v, Array& v_next){
+    double ad1, ad2;
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
+            ad1 = 1.0; // u[i][j];
+            ad2 = 1.0; // v[i][j];
             v_next[i][j] = v[i][j]
-                            - dt * ( u[i][j] * (v[i+1][j] - v[i-1][j]) / (2.0 * dx) + std::abs(u[i][j]) * (- v[i+1][j] + 2.0 * v[i][j] - v[i-1][j]) / (2.0 * dx))
-                            - dt * ( v[i][j] * (v[i][j+1] - v[i][j-1]) / (2.0 * dy) + std::abs(v[i][j]) * (- v[i][j+1] + 2.0 * v[i][j] - v[i][j-1]) / (2.0 * dy));
+                            - dt * ( ad1 * (v[i+1][j] - v[i-1][j]) / (2.0 * dx) + std::abs(ad1) * (- v[i+1][j] + 2.0 * v[i][j] - v[i-1][j]) / (2.0 * dx))
+                            - dt * ( ad2 * (v[i][j+1] - v[i][j-1]) / (2.0 * dy) + std::abs(ad2) * (- v[i][j+1] + 2.0 * v[i][j] - v[i][j-1]) / (2.0 * dy));
         }
     }
 }
@@ -101,15 +107,18 @@ int main(){
     fprintf(gp, "set contour\n");
     fprintf(gp, "set grid\n");
     fprintf(gp, "unset key\n");
-    //fprintf(gp, "set term dumb\n");
+    fprintf(gp, "set size ratio 1\n");
+    fprintf(gp, "set palette rgb 33,13,10\n");
     
     //初期条件描画
-    fprintf(gp, "splot '-' w l\n");
+    double norm = 0.0;
+    double coef = 0.0;
+    fprintf(gp, "plot '-' with vector lc palette\n");
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            fprintf(gp, "%f %f %f\n", i * dx , j * dy, std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]));
+            norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
+            fprintf(gp, "%f %f %f %f %f\n", i * dx , j * dy, u[i][j] / (norm * Nx), v[i][j] / (norm * Ny), norm);
         }
-        fprintf(gp, "\n");
     }
     fprintf(gp, "e\n");
     fflush(gp);
@@ -124,12 +133,12 @@ int main(){
 
         // 描画
         if(i%INTV == 0){
-            fprintf(gp, "splot '-' w l\n");
+            fprintf(gp, "plot '-' with vector lc palette\n");
             for(int i=0; i<Nx; ++i){
                 for(int j=0; j<Ny; ++j){
-                    fprintf(gp, "%f %f %f\n", i * dx , j * dy, std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]));
+                    norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
+                    fprintf(gp, "%f %f %f %f %f\n", i * dx , j * dy, u[i][j] / (norm * Nx), v[i][j] / (norm * Ny), norm);
                 }
-                fprintf(gp, "\n");
             }
             fprintf(gp, "e\n");
             fflush(gp);
