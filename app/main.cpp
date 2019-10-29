@@ -123,8 +123,8 @@ int main(){
     fprintf(gp, "e\n");
     fflush(gp);
 
-    //std::cout << "Enterキーを押してください．" << std::endl;
-    //getchar();
+    std::cout << "Enterキーを押してください．" << std::endl;
+    getchar();
 
     for(int i=0;;++i){
         upWind_firstOrder_X(u ,v, u_next);
