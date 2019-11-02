@@ -20,8 +20,8 @@ const double dy    = Ly / (Ny - 1);
 const double a     = 1.0; // advection [a, b]^T
 const double b     = 1.0; // vector field
 const double alpha = 1.0;   // 1:UTOPIA 3:K-K
-const double dt    = 0.01 / (std::sqrt(a * a + b * b) * std::sqrt((1.0 / dx) * (1.0 / dx) + (1.0 / dy) * (1.0 / dy)));
-const int INTV     = 100;
+const double dt    = 0.1 / (std::sqrt(a * a + b * b) * std::sqrt((1.0 / dx) * (1.0 / dx) + (1.0 / dy) * (1.0 / dy)));
+const int INTV     = 40;
 
 namespace rittai3d{
 	namespace utility{
@@ -124,8 +124,10 @@ void upWind_fifthOrder_X(Array& u, Array& v, Array& u_next){
     double ad1, ad2;
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            ad1 = a; // u[i][j];
-            ad2 = b; // v[i][j];
+            //ad1 = - (j * dy - Ly/2.0); // u[i][j];
+            //ad2 =   (i * dx - Lx/2.0); // v[i][j];
+            ad1 = 1.0;
+            ad2 = 0.0;
             u_next[i][j] =
                 - ( ad1 * ( u[i+3][j] - 9.0 * u[i+2][j] + 45.0 * (u[i+1][j] - u[i-1][j]) + 9.0 * u[i-2][j] - u[i-3][j] ) / (60.0 * dx)
                     + std::abs(ad1) * ( - u[i+3][j] + 6.0 * u[i+2][j] - 15.0 * u[i+1][j] + 20.0 * u[i][j] - 15.0 * u[i-1][j] + 6.0 * u[i-2][j] - u[i-3][j] ) / (60.0 * dx))
@@ -139,8 +141,10 @@ void upWind_fifthOrder_Y(Array& u, Array& v, Array& v_next){
     double ad1, ad2;
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            ad1 = a; // u[i][j];
-            ad2 = b; // v[i][j];
+            //ad1 = - (j * dy - Ly/2.0); // u[i][j];
+            //ad2 =   (i * dx - Lx/2.0); // v[i][j];
+            ad1 = 1.0;
+            ad2 = 0.0;
             v_next[i][j] =
                 - ( ad1 * ( v[i+3][j] - 9.0 * v[i+2][j] + 45.0 * (v[i+1][j] - v[i-1][j]) + 9.0 * v[i-2][j] - v[i-3][j] ) / (60.0 * dx)
                     + std::abs(ad1) * ( - v[i+3][j] + 6.0 * v[i+2][j] - 15.0 * v[i+1][j] + 20.0 * v[i][j] - 15.0 * v[i-1][j] + 6.0 * v[i-2][j] - v[i-3][j] ) / (60.0 * dx))
@@ -164,7 +168,7 @@ void clear(Array& u, Array& v, Array& u_next, Array& v_next){
 void init_func(Array& u, Array& v){
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            if(i>Nx/4 && i<3*Nx/4 && j>Ny/4 && j<3*Ny/4){
+            if(i>3*Nx/8 && i<5*Nx/8 && j>Ny/4 && j<3*Ny/4){
                 u[i][j] = 1.0;
                 v[i][j] = 1.0;
             }
@@ -191,6 +195,19 @@ void Euler_3rdOrder(Array& u, Array& v, Array& u_next, Array& v_next){
     Array dv = {};
     upWind_thirdOrder_X(u, v, du);
     upWind_thirdOrder_Y(u, v, dv);
+    for(int i=0; i<Nx; ++i){
+        for(int j=0; j<Ny; ++j){
+            u_next[i][j] = u[i][j] + dt * du[i][j];
+            v_next[i][j] = v[i][j] + dt * dv[i][j];
+        }
+    }
+}
+
+void Euler_5thOrder(Array& u, Array& v, Array& u_next, Array& v_next){
+    Array du = {};
+    Array dv = {};
+    upWind_fifthOrder_X(u, v, du);
+    upWind_fifthOrder_Y(u, v, dv);
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u_next[i][j] = u[i][j] + dt * du[i][j];
@@ -228,6 +245,43 @@ void TVD_RK3_3rdOrder(Array& u, Array& v, Array& u_next, Array& v_next){
     Array dv3 = {};
     upWind_thirdOrder_X(u2 ,v2, du3);
     upWind_thirdOrder_Y(u2 ,v2, dv3);
+    for(int i=0; i<Nx; ++i){
+        for(int j=0; j<Ny; ++j){
+            u_next[i][j] = 1.0 / 3.0 * u[i][j] + 2.0 / 3.0 * u2[i][j] + 2.0 / 3.0 * dt * du3[i][j];
+            v_next[i][j] = 1.0 / 3.0 * v[i][j] + 2.0 / 3.0 * v2[i][j] + 2.0 / 3.0 * dt * dv3[i][j];
+        }
+    }
+}
+
+void TVD_RK3_5thOrder(Array& u, Array& v, Array& u_next, Array& v_next){
+    Array du1 = {};
+    Array dv1 = {};
+    Array u1  = {};
+    Array v1  = {};
+    upWind_fifthOrder_X(u ,v, du1);
+    upWind_fifthOrder_Y(u ,v, dv1);
+    for(int i=0; i<Nx; ++i){
+        for(int j=0; j<Ny; ++j){
+            u1[i][j] = u[i][j] + dt * du1[i][j];
+            v1[i][j] = v[i][j] + dt * dv1[i][j];
+        }
+    }
+    Array du2 = {};
+    Array dv2 = {};
+    Array u2  = {};
+    Array v2  = {};
+    upWind_fifthOrder_X(u1 ,v1, du2);
+    upWind_fifthOrder_Y(u1 ,v1, dv2);
+    for(int i=0; i<Nx; ++i){
+        for(int j=0; j<Ny; ++j){
+            u2[i][j] = 3.0 / 4.0 * u[i][j] + 1.0 / 4.0 * u1[i][j] + 1.0 / 4.0 * dt * du2[i][j];
+            v2[i][j] = 3.0 / 4.0 * v[i][j] + 1.0 / 4.0 * v1[i][j] + 1.0 / 4.0 * dt * dv2[i][j];
+        }
+    }
+    Array du3 = {};
+    Array dv3 = {};
+    upWind_fifthOrder_X(u2 ,v2, du3);
+    upWind_fifthOrder_Y(u2 ,v2, dv3);
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u_next[i][j] = 1.0 / 3.0 * u[i][j] + 2.0 / 3.0 * u2[i][j] + 2.0 / 3.0 * dt * du3[i][j];
@@ -352,8 +406,8 @@ void RK4_3rdOrder(Array& u, Array& v, Array& u_next, Array& v_next){
     }
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            u_next[i][j] = 1.0 / 6.0 * u1[i][j] + 1.0 / 3.0 * u2[i][j] + 1.0 / 3.0 * u3[i][j] + 1.0 / 6.0 * u4[i][j];
-            v_next[i][j] = 1.0 / 6.0 * v1[i][j] + 1.0 / 3.0 * v2[i][j] + 1.0 / 3.0 * v3[i][j] + 1.0 / 6.0 * v4[i][j];
+            u_next[i][j] = u[i][j] + 1.0 / 6.0 * dt * (1.0 * u1[i][j] + 2.0 * u2[i][j] + 2.0 * u3[i][j] + 1.0 * u4[i][j]);
+            v_next[i][j] = v[i][j] + 1.0 / 6.0 * dt * (1.0 * v1[i][j] + 2.0 * v2[i][j] + 2.0 * v3[i][j] + 1.0 * v4[i][j]);
         }
     }
 }
@@ -409,14 +463,14 @@ void RK4_5rdOrder(Array& u, Array& v, Array& u_next, Array& v_next){
     }
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            u_next[i][j] = 1.0 / 6.0 * u1[i][j] + 1.0 / 3.0 * u2[i][j] + 1.0 / 3.0 * u3[i][j] + 1.0 / 6.0 * u4[i][j];
-            v_next[i][j] = 1.0 / 6.0 * v1[i][j] + 1.0 / 3.0 * v2[i][j] + 1.0 / 3.0 * v3[i][j] + 1.0 / 6.0 * v4[i][j];
+            u_next[i][j] = u[i][j] + 1.0 / 6.0 * dt * (du1[i][j] + 2.0 * du2[i][j] + 2.0 * du3[i][j] + 1.0 * du4[i][j]);
+            v_next[i][j] = v[i][j] + 1.0 / 6.0 * dt * (dv1[i][j] + 2.0 * dv2[i][j] + 2.0 * dv3[i][j] + 1.0 * dv4[i][j]);
         }
     }
 }
 
 int main(){
-    std::cout << std::fixed << std::setprecision(std::numeric_limits<double>::digits10 - 8);
+    std::cout << std::fixed << std::setprecision(std::numeric_limits<double>::digits10);
 
     Array u = {};
     Array v = {};
@@ -452,23 +506,26 @@ int main(){
     fprintf(gp, "e\n");
     fflush(gp);
 
-    std::cout << "Enterキーを押してください．" << std::endl;
-    getchar();
+    //std::cout << "Enterキーを押してください．" << std::endl;
+    //getchar();
 
-    for(int i=1; t<1.0; ++i){
+    for(int i=1; t<100.0; ++i){
         //Euler_1stOrder(u, v, u_next, v_next);
         //Euler_3rdOrder(u, v, u_next, v_next);
+        //Euler_5thOrder(u, v, u_next, v_next);
         //TVD_RK3_3rdOrder(u, v, u_next, v_next);
-        RK3_3rdOrder(u, v, u_next, v_next);
+        //TVD_RK3_5thOrder(u, v, u_next, v_next);
+        //RK3_3rdOrder(u, v, u_next, v_next);
         //RK4_3rdOrder(u, v, u_next, v_next);
-        //RK4_5rdOrder(u, v, u_next, v_next);
+        RK4_5rdOrder(u, v, u_next, v_next);
         clear(u, v, u_next, v_next);
 
         // 描画
         if(i%INTV == 0){
             fprintf(gp, "plot '-' with vector lc palette\n");
-            for(int i=0; i<Nx; ++i){
-                for(int j=0; j<Ny; ++j){
+            int step = 1;
+            for(int i=0; i<Nx; i += step){
+                for(int j=0; j<Ny; j += step){
                     norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
                     coef = 2.0 * norm;
                     fprintf(gp, "%f %f %f %f %f\n", i * dx , j * dy, coef * u[i][j] / (norm * Nx), coef * v[i][j] / (norm * Ny), norm);
