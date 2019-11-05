@@ -22,7 +22,7 @@ const double a     = 1.0; // advection [a, b]^T
 const double b     = 1.0; // vector field
 const double pi    = std::acos(-1.0);
 const int INTV     = 1000;
-const double mu    = 0.01;
+const double mu    = 0.4;
 double dt          = std::min(0.1 / (std::sqrt(a * a + b * b) * std::sqrt((1.0 / dx) * (1.0 / dx) + (1.0 / dy) * (1.0 / dy)))
                             , 0.1 * mu * 0.5 / (1.0 / (dx * dx) + 1.0 / (dy * dy)));
 
@@ -193,18 +193,24 @@ void init_func(Array& u, Array& v){
     }
     u[Nx/2][Ny/2] = 0.5;
     v[Nx/2][Ny/2] = 0.5;
+    for(int i=0; i<Nx; ++i){
+        for(int j=0; j<Ny; ++j){
+            u[i][j] =   0.0;
+            v[i][j] =   0.0;
+	}
+    }
 }
 
 void make_wind(Array& u, Array& v){
     double x = 0.0;
     double y = 0.0;
     for(int i=0; i<Nx; ++i){
-        u[i][0]    =   0.01;
-        u[i][Ny-1] = - 0.01;
+        u[i][0]    =   0.1;
+        u[i][Ny-1] = - 0.1;
     }
     for(int j=0; j<Ny; ++j){
-        v[0][j]    = - 0.01;
-        v[Nx-1][j] =   0.01;
+        v[0][j]    = - 0.1;
+        v[Nx-1][j] =   0.1;
     }
 }
 
@@ -218,11 +224,14 @@ void init_func_rho(Array& rho){
         for(int j=0; j<Ny; ++j){
             x = i * dx;
             y = j * dy;
+            rho[i][j] = 10.0 + 10.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
+	    /*
 	    if(y >= 0.5){
-                rho[i][j] = 10.1; // + 1.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
+                rho[i][j] = 11.0; // + 1.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
 	    } else {
     	        rho[i][j] = 10.0; // + 1.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
             }
+	    */
     	}
     }
 }
@@ -417,12 +426,12 @@ int main(){
     // getchar();
 
     int g = 1;
-    for(int i=1; t<1000000.0; ++i){
-        // make_wind(u, v);
+    for(int i=0; t<1000000.0; ++i){
+        make_wind(u, v);
         NS_RK4_5rdOrder(u, v, rho, u_next, v_next, rho_next);
         clear(u, v, u_next, v_next);
         clear_rho(rho, rho_next);
-        t = i * dt;
+        t = (i+1) * dt;
         double u_max = 0.0;
         double v_max = 0.0;
         double rho_max = 0.0;
@@ -445,7 +454,7 @@ int main(){
             fprintf(gp, "plot '-' with vector lc palette\n");
             //fprintf(gp, "splot '-' w l\n");
             int step = 1;
-	    coef = 0.5;
+	    coef = 1.2;
             for(int i=0; i<Nx; i += step){
                 for(int j=0; j<Ny; j += step){
                     norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
