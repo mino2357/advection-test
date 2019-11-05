@@ -14,15 +14,15 @@
 // parameters
 const double Lx    = 1.0;
 const double Ly    = 1.0;
-const int Nx       = 32;
-const int Ny       = 32;
+const int Nx       = 64;
+const int Ny       = 64;
 const double dx    = Lx / (Nx - 1);
 const double dy    = Ly / (Ny - 1);
 const double a     = 1.0; // advection [a, b]^T
 const double b     = 1.0; // vector field
 const double pi    = std::acos(-1.0);
 const int INTV     = 1000;
-const double mu    = 0.1;
+const double mu    = 0.01;
 double dt          = std::min(0.1 / (std::sqrt(a * a + b * b) * std::sqrt((1.0 / dx) * (1.0 / dx) + (1.0 / dy) * (1.0 / dy)))
                             , 0.1 * mu * 0.5 / (1.0 / (dx * dx) + 1.0 / (dy * dy)));
 
@@ -182,24 +182,29 @@ void init_func(Array& u, Array& v){
         for(int j=0; j<Ny; ++j){
             x = i * dx;
             y = j * dy;
-            u[i][j] = 0.0;
-            v[i][j] = 0.0;
+            if(y <= 0.5){
+                u[i][j] =   1.0;
+                v[i][j] =   0.0;
+            } else if ( y >= 0.5){
+                u[i][j] = - 0.5;
+                v[i][j] =   0.0;
+            }
         }
     }
+    u[Nx/2][Ny/2] = 0.5;
+    v[Nx/2][Ny/2] = 0.5;
 }
 
 void make_wind(Array& u, Array& v){
     double x = 0.0;
     double y = 0.0;
     for(int i=0; i<Nx; ++i){
-        for(int j=0; j<Ny; ++j){
-            x = i * dx;
-            y = j * dy;
-            if(x>=0.4 && x<=0.6 && y>=0.4 && y<=0.6){
-                u[i][j] = 0.1;
-                v[i][j] = 0.0;
-            }
-        }
+        u[i][0]    =   0.01;
+        u[i][Ny-1] = - 0.01;
+    }
+    for(int j=0; j<Ny; ++j){
+        v[0][j]    = - 0.01;
+        v[Nx-1][j] =   0.01;
     }
 }
 
@@ -213,8 +218,12 @@ void init_func_rho(Array& rho){
         for(int j=0; j<Ny; ++j){
             x = i * dx;
             y = j * dy;
-            rho[i][j] = 100.0; // + 10.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
-        }
+	    if(y >= 0.5){
+                rho[i][j] = 10.1; // + 1.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
+	    } else {
+    	        rho[i][j] = 10.0; // + 1.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
+            }
+    	}
     }
 }
 
@@ -241,7 +250,7 @@ Array operator*(double a, Array& u){
 void eqState(Array& rho, Array& p){
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            p[i][j] = 1.0 * rho[i][j];
+            p[i][j] = 10.0 * rho[i][j];
         }
     } 
 }
@@ -386,7 +395,8 @@ int main(){
     fprintf(gp, "unset key\n");
     fprintf(gp, "set size ratio 1\n");
     fprintf(gp, "set palette rgb 33,13,10\n");
-    
+    fprintf(gp, "set term png size 1024, 1024\n");
+
     //初期条件描画
     double norm = 0.0;
     double coef = 1.0;
@@ -406,8 +416,9 @@ int main(){
     // std::cout << "Enterキーを押してください．" << std::endl;
     // getchar();
 
+    int g = 1;
     for(int i=1; t<1000000.0; ++i){
-        make_wind(u, v);
+        // make_wind(u, v);
         NS_RK4_5rdOrder(u, v, rho, u_next, v_next, rho_next);
         clear(u, v, u_next, v_next);
         clear_rho(rho, rho_next);
@@ -434,6 +445,7 @@ int main(){
             fprintf(gp, "plot '-' with vector lc palette\n");
             //fprintf(gp, "splot '-' w l\n");
             int step = 1;
+	    coef = 0.5;
             for(int i=0; i<Nx; i += step){
                 for(int j=0; j<Ny; j += step){
                     norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
@@ -444,6 +456,8 @@ int main(){
             }
             fprintf(gp, "e\n");
             fflush(gp);
+	    fprintf(gp, "set output '%06d.png'\n", g);
+	    g++;
         }
         if(i%INTV == 0){
             std::cout << "time: " << t << " dt: " << dt << " rho_max: " << rho_max << " int_rho: " << int_rho << std::endl;
