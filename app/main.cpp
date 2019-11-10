@@ -10,21 +10,27 @@
 #include <limits>
 #include <iomanip>
 #include <algorithm>
+#include <omp.h>
 
 // parameters
 const double Lx    = 1.0;
 const double Ly    = 1.0;
-const int Nx       = 64;
-const int Ny       = 64;
+const int Nx       = 32;
+const int Ny       = 32;
 const double dx    = Lx / (Nx - 1);
 const double dy    = Ly / (Ny - 1);
 const double a     = 1.0; // advection [a, b]^T
 const double b     = 1.0; // vector field
 const double pi    = std::acos(-1.0);
 const int INTV     = 1000;
-const double mu    = 0.4;
+const double mu    = 1.83e-5;
 double dt          = std::min(0.1 / (std::sqrt(a * a + b * b) * std::sqrt((1.0 / dx) * (1.0 / dx) + (1.0 / dy) * (1.0 / dy)))
                             , 0.1 * mu * 0.5 / (1.0 / (dx * dx) + 1.0 / (dy * dy)));
+const int view     = 0;
+const double R     = 8.31446261815324; // J K^1 mol^1
+const double Air   = 28.966; // g/mol
+const double T     = 273;    // K
+const double air0  = 1293;   // g/m^3
 
 namespace rittai3d{
 	namespace utility{
@@ -60,6 +66,7 @@ using Array = sksat::array_wrapper<Nx, sksat::array_wrapper<Ny>>;;
 /********************************/
 
 void d_X(Array& px, Array& px_next){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             px_next[i][j] = ( - px[i+2][j] + 8.0 * px[i+1][j] - 8.0 * px[i-1][j] + px[i-2][j]) / (12.0 * dx);
@@ -68,6 +75,7 @@ void d_X(Array& px, Array& px_next){
 }
 
 void d_Y(Array& py, Array& py_next){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             py_next[i][j] = ( - py[i][j+2] + 8.0 * py[i][j+1] - 8.0 * py[i][j-1] + py[i][j-2]) / (12.0 * dy);
@@ -80,6 +88,7 @@ void d_Y(Array& py, Array& py_next){
 /********************************/
 
 void diffusion_fourthOrder_X(Array& u, Array& u_next){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u_next[i][j] = mu * (
@@ -91,6 +100,7 @@ void diffusion_fourthOrder_X(Array& u, Array& u_next){
 }
 
 void diffusion_fourthOrder_Y(Array& v, Array& v_next){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             v_next[i][j] = mu * (
@@ -107,6 +117,7 @@ void diffusion_fourthOrder_Y(Array& v, Array& v_next){
 
 void upWind_fifthOrder_X(Array& u, Array& v, Array& u_next){
     double ad1, ad2;
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             ad1 = u[i][j]; // - (j * dy - Ly/2.0); // u[i][j];
@@ -122,6 +133,7 @@ void upWind_fifthOrder_X(Array& u, Array& v, Array& u_next){
 
 void upWind_fifthOrder_Y(Array& u, Array& v, Array& v_next){
     double ad1, ad2;
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             ad1 = u[i][j]; // - (j * dy - Ly/2.0); // u[i][j];
@@ -142,6 +154,7 @@ void upWind_fifthOrder_Scalar(Array& u, Array& v, Array& rho, Array& rho_next){
     Array vy = {};
     d_X(u, ux);
     d_Y(v, vy);
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             ad1 = u[i][j];
@@ -158,6 +171,7 @@ void upWind_fifthOrder_Scalar(Array& u, Array& v, Array& rho, Array& rho_next){
 
 // clear
 void clear(Array& u, Array& v, Array& u_next, Array& v_next){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u[i][j] = u_next[i][j];
@@ -167,6 +181,7 @@ void clear(Array& u, Array& v, Array& u_next, Array& v_next){
 }
 
 void clear_rho(Array& rho, Array& rho_next){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             rho[i][j] = rho_next[i][j];
@@ -178,6 +193,7 @@ void clear_rho(Array& rho, Array& rho_next){
 void init_func(Array& u, Array& v){
     double x = 0.0;
     double y = 0.0;
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             x = i * dx;
@@ -193,6 +209,7 @@ void init_func(Array& u, Array& v){
     }
     u[Nx/2][Ny/2] = 0.5;
     v[Nx/2][Ny/2] = 0.5;
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u[i][j] =   0.0;
@@ -204,13 +221,18 @@ void init_func(Array& u, Array& v){
 void make_wind(Array& u, Array& v){
     double x = 0.0;
     double y = 0.0;
+    double a = 0.01;
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
-        u[i][0]    =   0.1;
-        u[i][Ny-1] = - 0.1;
+	x = i * dx;
+        u[i][0]    =   a * std::sin(pi * x);
+        u[i][Ny-1] = - a * std::sin(pi * x);
     }
+    #pragma omp parallel for
     for(int j=0; j<Ny; ++j){
-        v[0][j]    = - 0.1;
-        v[Nx-1][j] =   0.1;
+	y = j * dy;
+        v[0][j]    = - a * std::sin(pi * y);
+        v[Nx-1][j] =   a * std::sin(pi * y);
     }
 }
 
@@ -220,11 +242,12 @@ void init_func_rho(Array& rho){
     double y = 0.0;
     double a = Lx / 2.0;
     double b = Ly / 2.0;
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             x = i * dx;
             y = j * dy;
-            rho[i][j] = 10.0 + 10.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
+            rho[i][j] = air0 + 0.01 * air0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
 	    /*
 	    if(y >= 0.5){
                 rho[i][j] = 11.0; // + 1.0 * std::exp( - 100.0 * ((x - a) * (x - a) + (y - b) * (y - b)));
@@ -238,6 +261,7 @@ void init_func_rho(Array& rho){
 
 Array operator+(Array& u, Array& v){
     Array ans = {};
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             ans[i][j] = u[i][j] + v[i][j];
@@ -248,6 +272,7 @@ Array operator+(Array& u, Array& v){
 
 Array operator*(double a, Array& u){
     Array ans = {};
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             ans[i][j] = a * u[i][j];
@@ -257,9 +282,10 @@ Array operator*(double a, Array& u){
 }
 
 void eqState(Array& rho, Array& p){
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
-            p[i][j] = 10.0 * rho[i][j];
+            p[i][j] = rho[i][j] / Air * R * T;
         }
     } 
 }
@@ -285,6 +311,7 @@ void NS_RK4_5rdOrder(Array& u, Array& v, Array& rho, Array& u_next, Array& v_nex
     eqState(rho, p1);
     d_X(p1, px1);
     d_Y(p1, py1);
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u1[i][j] = u[i][j] + dt * (du1[i][j] + (difu1[i][j] - px1[i][j]) / rho[i][j]);
@@ -311,6 +338,7 @@ void NS_RK4_5rdOrder(Array& u, Array& v, Array& rho, Array& u_next, Array& v_nex
     eqState(rho1, p2);
     d_X(p2, px2);
     d_Y(p2, py2);
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u2[i][j] = u[i][j] + 1.0 / 2.0 * dt * (du2[i][j] + (difu2[i][j] - px2[i][j]) / rho[i][j]);
@@ -337,6 +365,7 @@ void NS_RK4_5rdOrder(Array& u, Array& v, Array& rho, Array& u_next, Array& v_nex
     eqState(rho2, p3);
     d_X(p3, px3);
     d_Y(p3, py3);
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u3[i][j] = u[i][j] + 1.0 / 2.0 * dt * (du3[i][j] + (difu3[i][j] - px3[i][j]) / rho[i][j]);
@@ -363,6 +392,7 @@ void NS_RK4_5rdOrder(Array& u, Array& v, Array& rho, Array& u_next, Array& v_nex
     eqState(rho3, p4);
     d_X(p4, px4);
     d_Y(p4, py4);
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             du4[i][j] = (du4[i][j] + (difu4[i][j] - px4[i][j]) / rho[i][j]);
@@ -370,6 +400,7 @@ void NS_RK4_5rdOrder(Array& u, Array& v, Array& rho, Array& u_next, Array& v_nex
             drho4[i][j] = drho4[i][j];
         }
     }
+    #pragma omp parallel for
     for(int i=0; i<Nx; ++i){
         for(int j=0; j<Ny; ++j){
             u_next[i][j] = u[i][j] + 1.0 / 6.0 * dt * (du1[i][j] + 2.0 * du2[i][j] + 2.0 * du3[i][j] + du4[i][j]);
@@ -396,46 +427,46 @@ int main(){
     /**********************************************************************/
     /*                 可視化の設定(gnuplot)                                */
     /**********************************************************************/
-    std::FILE *gp = popen( "gnuplot -persist", "w" );
-    fprintf(gp, "set xr [0:%f]\n", Lx);
-    fprintf(gp, "set yr [0:%f]\n", Ly);
-    fprintf(gp, "set contour\n");
-    fprintf(gp, "set grid\n");
-    fprintf(gp, "unset key\n");
-    fprintf(gp, "set size ratio 1\n");
-    fprintf(gp, "set palette rgb 33,13,10\n");
-    fprintf(gp, "set term png size 1024, 1024\n");
-
-    //初期条件描画
     double norm = 0.0;
     double coef = 1.0;
-    //fprintf(gp, "plot '-' with vector lc palette\n");
-    fprintf(gp, "splot '-' w l\n");
-    for(int i=0; i<Nx; ++i){
-        for(int j=0; j<Ny; ++j){
-            norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
-            //fprintf(gp, "%f %f %f %f %f\n", i * dx , j * dy, coef * u[i][j] / (norm * Nx), coef * v[i][j] / (norm * Ny), norm);
-            fprintf(gp, "%f %f %f\n", i * dx , j * dy, rho[i][j]);
-        }
-        fprintf(gp, "\n");
-    }
-    fprintf(gp, "e\n");
-    fflush(gp);
+    std::FILE *gp = popen( "gnuplot -persist", "w" );
+    if(view == 0){
+        fprintf(gp, "set xr [0:%f]\n", Lx);
+        fprintf(gp, "set yr [0:%f]\n", Ly);
+        fprintf(gp, "set contour\n");
+        fprintf(gp, "set grid\n");
+        fprintf(gp, "unset key\n");
+        fprintf(gp, "set size ratio 1\n");
+        fprintf(gp, "set palette rgb 33,13,10\n");
+        fprintf(gp, "set term png size 1080, 1080\n");
 
-    // std::cout << "Enterキーを押してください．" << std::endl;
-    // getchar();
+        //初期条件描画
+        fprintf(gp, "plot '-' with vector lc palette\n");
+        fprintf(gp, "splot '-' w l\n");
+        for(int i=0; i<Nx; ++i){
+            for(int j=0; j<Ny; ++j){
+                norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
+                fprintf(gp, "%lf %lf %lf %lf %lf\n", i * dx , j * dy, coef * u[i][j] / (norm * Nx), coef * v[i][j] / (norm * Ny), norm);
+                //fprintf(gp, "%lf %lf %lf\n", i * dx , j * dy, rho[i][j]);
+            }
+            //fprintf(gp, "\n");
+        }
+        fprintf(gp, "e\n");
+        fflush(gp);
+
+        // std::cout << "Enterキーを押してください．" << std::endl;
+        // getchar();
+    }
 
     int g = 1;
-    for(int i=0; t<1000000.0; ++i){
-        make_wind(u, v);
+    for(int i=0; t<100000.0; ++i){
+    	// make_wind(u, v);
         NS_RK4_5rdOrder(u, v, rho, u_next, v_next, rho_next);
         clear(u, v, u_next, v_next);
-        clear_rho(rho, rho_next);
-        t = (i+1) * dt;
-        double u_max = 0.0;
-        double v_max = 0.0;
         double rho_max = 0.0;
         double int_rho = 0.0;
+        double u_max = 0.0;
+        double v_max = 0.0;
         for(int i=0; i<Nx; ++i){
             for(int j=0; j<Ny; ++j){
                 u_max = std::max(u_max, std::abs(u[i][j]));
@@ -450,26 +481,40 @@ int main(){
                     , co * (mu / rho_max) * 0.5 / (1.0 / (dx * dx) + 1.0 / (dy * dy)));
         
         // 描画
-        if(i%INTV == 0){
+        if(i%INTV == 0 && view == 0){
             fprintf(gp, "plot '-' with vector lc palette\n");
             //fprintf(gp, "splot '-' w l\n");
             int step = 1;
-	    coef = 1.2;
+	        coef = 1.2;
             for(int i=0; i<Nx; i += step){
                 for(int j=0; j<Ny; j += step){
                     norm = std::sqrt(u[i][j] * u[i][j] + v[i][j] * v[i][j]);
-                    fprintf(gp, "%f %f %f %f %f\n", i * dx , j * dy, coef * u[i][j] / (norm * Nx), coef * v[i][j] / (norm * Ny), norm);
-                    //fprintf(gp, "%f %f %f\n", i * dx , j * dy, rho[i][j]);
+                    fprintf(gp, "%.16f %.16f %.16f %.16f %.16f\n", i * dx , j * dy, coef * u[i][j] / (norm * Nx), coef * v[i][j] / (norm * Ny), norm);
+                    //fprintf(gp, "%lf %lf %lf\n", i * dx , j * dy, rho[i][j]);
                 }
                 //fprintf(gp, "\n");
             }
             fprintf(gp, "e\n");
             fflush(gp);
-	    fprintf(gp, "set output '%06d.png'\n", g);
-	    g++;
+	        fprintf(gp, "set output 'air%06d.png'\n", g);
+	        g++;
         }
+        // 出力
+        /*
         if(i%INTV == 0){
-            std::cout << "time: " << t << " dt: " << dt << " rho_max: " << rho_max << " int_rho: " << int_rho << std::endl;
+            for(int i=0; i<Nx; ++i){
+                for(int j=0; j<Ny; ++j){
+                    std::cout << i * dx << " " << j * dy << " " << u[i][j] << " " << v[i][j] << " " << rho[i][j] << std::endl;
+                }
+            }
+	        std::cout << std::endl;
+        }
+        */
+        t += dt;
+        if(i%INTV == 0){
+            std::cout << "time: " << t << " dt: " << dt << " u_max: " << u_max << " v_max: " << v_max << " rho_max: " << rho_max << " int_rho: " << int_rho
+                      << " P: " << rho_max / Air * R * T << std::endl;
         }
     }
+    pclose(gp);
 }
